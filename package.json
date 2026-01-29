@@ -1,0 +1,27 @@
+{
+  "name": "cross-chain-examples",
+  "version": "1.0.0",
+  "description": "Cross-chain payment API examples",
+  "scripts": {
+    "evm-to-evm": "ts-node ./src/evm-to-evm.ts",
+    "evm-to-mvm": "ts-node ./src/evm-to-mvm.ts",
+    "evm-to-svm": "ts-node ./src/evm-to-svm.ts",
+    "mvm-to-evm": "ts-node ./src/mvm-to-evm.ts",
+    "mvm-to-svm": "ts-node ./src/mvm-to-svm.ts",
+    "svm-to-evm": "ts-node ./src/svm-to-evm.ts",
+    "svm-to-mvm": "ts-node ./src/svm-to-mvm.ts"
+  },
+  "dependencies": {
+    "@aptos-labs/ts-sdk": "5.2.1",
+    "@solana/web3.js": "1.98.4",
+    "axios": "1.13.4",
+    "bs58": "6.0.0",
+    "dotenv": "17.2.3",
+    "ethers": "5.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "25.1.0",
+    "ts-node": "10.9.2",
+    "typescript": "5.9.3"
+  }
+}
