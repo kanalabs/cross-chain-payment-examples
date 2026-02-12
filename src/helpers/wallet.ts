@@ -3,11 +3,14 @@ import { Connection, Keypair, VersionedTransaction } from '@solana/web3.js';
 import {
   Aptos,
   AptosConfig,
+  Deserializer,
   Ed25519Account,
   Ed25519PrivateKey,
   Network,
   PrivateKey,
   PrivateKeyVariants,
+  RawTransaction,
+  SimpleTransaction,
 } from '@aptos-labs/ts-sdk';
 import bs58 from 'bs58';
 import { CHAIN_CONFIGS, WALLET_CONFIG } from './config';
@@ -133,50 +136,62 @@ export class WalletManager {
     return new Connection(chainConfig.rpcUrl, { commitment: 'confirmed' });
   }
 
+async sendSolanaTransaction(chainId: KanaChainID, base64Tx: string): Promise<string> {
+  try {
+    this.logger.info(`Sending transaction on ${CHAIN_CONFIGS[chainId].name}...`);
 
-  async sendSolanaTransaction(chainId: KanaChainID, base64Tx: string): Promise<string> {
-    try {
-      this.logger.info(`Sending transaction on ${CHAIN_CONFIGS[chainId].name}...`);
+    const connection = this.getSolanaConnection(chainId);
+    const signer = this.getSolanaKeypair();
 
-      const connection = this.getSolanaConnection(chainId);
-      const signer = this.getSolanaKeypair();
+    // 1. Deserialize the versioned transaction
+    const tx = VersionedTransaction.deserialize(Buffer.from(base64Tx, 'base64'));
 
-      // Deserialize the versioned transaction
-      const tx = VersionedTransaction.deserialize(Buffer.from(base64Tx, 'base64'));
+    // 2. Sign the transaction
+    tx.sign([signer]);
 
-      // Sign the transaction
-      tx.sign([signer]);
+    // 3. Send the transaction
+    const sig = await connection.sendRawTransaction(tx.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed',
+    });
 
-      // Send the transaction
-      const sig = await connection.sendRawTransaction(tx.serialize(), {
-        skipPreflight: false,
-        preflightCommitment: 'confirmed',
-      });
+    this.logger.info(`Transaction sent: ${sig}`);
+    this.logger.info('Waiting for confirmation (polling)...');
 
-      this.logger.info(`Transaction sent: ${sig}`);
-      this.logger.info('Waiting for confirmation...');
+    // 4. MANUAL POLLING
+    let confirmed = false;
+    const timeout = 60000; // 60 seconds
+    const start = Date.now();
 
-      // Wait for finalization
-      const status = await connection.confirmTransaction(
-        {
-          signature: sig,
-          ...(await connection.getLatestBlockhash('confirmed')),
-        },
-        'finalized'
-      );
+    while (Date.now() - start < timeout) {
+      const { value: statuses } = await connection.getSignatureStatuses([sig]);
+      const status = statuses[0];
 
-      if (status.value.err) {
-        throw new Error('Solana transaction failed');
+      if (status) {
+        if (status.err) {
+          throw new Error(`Solana transaction failed: ${JSON.stringify(status.err)}`);
+        }
+        // 'confirmed' or 'finalized' are usually enough for the bridge to proceed
+        if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') {
+          confirmed = true;
+          break;
+        }
       }
 
-      this.logger.success(`Transaction confirmed!`);
-
-      return sig;
-    } catch (error: any) {
-      this.logger.error('Failed to send Solana transaction:', error.message);
-      throw error;
+      await new Promise((resolve) => setTimeout(resolve, 2000)); // Poll every 2s
     }
+
+    if (!confirmed) {
+      throw new Error('Transaction confirmation timeout');
+    }
+
+    this.logger.success(`Transaction confirmed!`);
+    return sig;
+  } catch (error: any) {
+    this.logger.error('Failed to send Solana transaction:', error.message);
+    throw error;
   }
+}
 
   getAptosAccount(): Ed25519Account {
     if (!WALLET_CONFIG.APTOS_PRIVATE_KEY) {
@@ -259,6 +274,40 @@ export class WalletManager {
       throw error;
     }
   }
+
+  async sendAptosSerializedTransaction(chainId: KanaChainID, rawTxHex: string): Promise<string> {
+    try {
+        const aptos = this.getAptosClient(chainId);
+        const account = this.getAptosAccount();
+
+        // 1. Convert Hex to Bytes
+        const txBytes = new Uint8Array(Buffer.from(rawTxHex, 'hex'));
+        
+        // 2. Deserialize into a RawTransaction object
+        const deserializer = new Deserializer(txBytes);
+        const rawTxn = RawTransaction.deserialize(deserializer);
+
+        // 3. Wrap in SimpleTransaction
+        const transaction = new SimpleTransaction(rawTxn);
+
+        this.logger.info(`Submitting Serialized Transaction...`);
+
+        // 4. Sign and Submit
+        const committedTx = await aptos.signAndSubmitTransaction({
+            signer: account,
+            transaction: transaction,
+        });
+
+        // 5. Wait for confirmation
+        await aptos.waitForTransaction({ transactionHash: committedTx.hash });
+        
+        this.logger.success(`Aptos Transaction Confirmed: ${committedTx.hash}`);
+        return committedTx.hash;
+    } catch (error: any) {
+        this.logger.error(`Aptos Serialized Tx Failed: ${error.message}`);
+        throw error;
+    }
+}
 
 
   getAddress(chainId: KanaChainID): string {

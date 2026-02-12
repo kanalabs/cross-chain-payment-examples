@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import {
   KanaChainID,
   USDC_TOKENS,
@@ -15,24 +16,25 @@ async function main() {
 
   try {
     logger.divider();
-    logger.info('Cross-Chain Transfer: Aptos -> Solana (MVM to SVM)');
+    logger.info('🚀 Starting Multi-Hop Test: Aptos (MVM) -> Solana (SVM)');
     logger.divider();
 
-    // Configuration
+    // 1. Configuration
     const sourceChain = KanaChainID.Aptos;
     const targetChain = KanaChainID.Solana;
-    const amount = '10000'; // 0.04 USDC (6 decimals)
+    const amount = '100000'; // 0.1 USDC (6 decimals)
 
     const userAddress = walletManager.getAddress(sourceChain);
-    const recipientAddress = walletManager.getAddress(targetChain);
+    const recipientAddress = process.env.SOLANA_PUBLIC_KEY || walletManager.getAddress(targetChain);
 
-    logger.info(`Source Chain: Aptos (ID: ${sourceChain})`);
-    logger.info(`Target Chain: Solana (ID: ${targetChain})`);
-    logger.info(`User Address: ${userAddress}`);
-    logger.info(`Amount: 0.04 USDC`);
+    logger.info(`Route: Aptos (2) -> Solana (1)`);
+    logger.info(`Source User: ${userAddress}`);
+    logger.info(`Target Recipient: ${recipientAddress}`);
 
-    // Step 1: Get Quote
-    logger.step(1, 'Fetching cross-chain quote');
+    // ---------------------------------------------------------
+    // STEP 1: GET QUOTE
+    // ---------------------------------------------------------
+    logger.step(1, 'Fetching cross-chain quote...');
 
     const quoteParams: QuoteParams = {
       userAddress,
@@ -45,45 +47,82 @@ async function main() {
     };
 
     const quote = await apiClient.getQuote(quoteParams);
-    // Validate transaction type
-    const transaction = quote.data.transaction;
-    if (transaction.kind !== 'aptos') {
-      throw new Error(`Expected Aptos transaction, got ${transaction.kind}`);
+    const quoteData = quote.data;
+    const txExecution = quoteData.transaction;
+
+    logger.success(`Quote Received! ID: ${quoteData.requestId}`);
+
+    // ---------------------------------------------------------
+    // STEP 2: EXECUTE APTOS TRANSACTION
+    // ---------------------------------------------------------
+    logger.step(2, 'Processing Aptos Serialized Transaction...');
+    let txHash: string;
+
+    if (txExecution.kind === 'aptos-serialized') {
+      txHash = await walletManager.sendAptosSerializedTransaction(
+        sourceChain,
+        txExecution.execution.data.raw_transaction
+      );
+    } else {
+      throw new Error(`Unexpected transaction kind: ${txExecution.kind}. Expected 'aptos-serialized'.`);
     }
 
-    // Step 2: Execute Aptos transaction
-    logger.step(2, 'Executing cross-chain transaction on Aptos');
-    const txHash = await walletManager.sendAptosTransaction(sourceChain, transaction.execution.data);
-    logger.success(`Transaction sent: ${txHash}`);
+    logger.success(`Aptos Transaction Confirmed: ${txHash}`);
 
-    // Step 4: Poll status
-    logger.step(4, 'Polling transaction status');
+    // ---------------------------------------------------------
+    // STEP 3: SIGN AUTH MESSAGE
+    // ---------------------------------------------------------
+    logger.step(3, 'Signing Auth Message for status polling...');
+
+    const account = walletManager.getAptosAccount();
+    const authMessage = (quoteData as any).auth?.message;
+
+    if (!authMessage) throw new Error("Auth message missing in quote data");
+
+    const messageBytes = new TextEncoder().encode(authMessage);
+    const signed = account.sign(messageBytes);
+    
+    const signature = signed.toString(); // Hex string
+    const publicKey = account.publicKey.toString(); // Hex string
+
+    logger.success('Aptos Auth Signature and Public Key generated');
+
+    // ---------------------------------------------------------
+    // STEP 4: POLL STATUS
+    // ---------------------------------------------------------
+    logger.step(4, 'Polling Multi-Hop Status (Aptos -> Solana)...');
 
     const statusParams: StatusParams = {
-      requestId: quote.data.requestId,
-      txHash,
-      userAddress,
-      recipientAddress,
-      amount,
+      requestId: quoteData.requestId,
+      txHash: txHash,
+      userAddress: userAddress,
+      recipientAddress: recipientAddress,
+      amount: quoteData.amounts.amountOut,
       sourceChainId: sourceChain,
       targetChainId: targetChain,
       targetTokenAddress: USDC_TOKENS[targetChain].address,
-    };
+      authSignature: signature,
+      authPublicKey: publicKey, // Critical for Aptos source verification
+    } as any;
 
     const finalStatus = await apiClient.pollStatus(statusParams);
 
-    // Success
+    // ---------------------------------------------------------
+    // FINISHED
+    // ---------------------------------------------------------
     logger.divider();
-    logger.success('Cross-chain transfer completed successfully!');
-    logger.info(`Transaction ID: ${finalStatus.data.transactionId}`);
-    logger.info(`Transaction Hash: ${finalStatus.data.txHash}`);
-    logger.info(`Final Status: ${finalStatus.data.status}`);
+    if (finalStatus.data.status === 'COMPLETED') {
+      logger.success('🎉 SUCCESS! Bridge to Solana Completed.');
+    } else {
+      logger.error(`Transfer finished with status: ${finalStatus.data.status}`);
+    }
     logger.divider();
+
   } catch (error: any) {
-    logger.error('Cross-chain transfer failed:', error.message);
+    logger.error('Test Execution Failed:');
+    console.error(error.message);
     process.exit(1);
   }
 }
 
-// Run the example
 main();

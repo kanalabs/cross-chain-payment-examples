@@ -49,13 +49,11 @@ interface SolanaTransaction {
 }
 
 interface AptosTransaction {
-  kind: 'aptos';
+  kind: 'aptos-serialized';
   execution: {
     description: string;
     data: {
-      function: string;
-      type_arguments: string[];
-      arguments: any[];
+      raw_transaction: string;
     };
   };
 }
@@ -113,6 +111,8 @@ export interface StatusParams {
   sourceChainId: number;
   targetChainId: number;
   targetTokenAddress: string;
+  authSignature: string;
+  authPublicKey?: string; // Optional, only needed for certain chains like Aptos
 }
 
 export interface StatusResponse {

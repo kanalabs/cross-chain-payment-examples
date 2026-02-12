@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import {
   KanaChainID,
   USDC_TOKENS,
@@ -15,24 +16,25 @@ async function main() {
 
   try {
     logger.divider();
-    logger.info('Cross-Chain Transfer: Arbitrum -> Solana (EVM to SVM)');
+    logger.info('🚀 Starting Multi-Hop Test: Arbitrum (EVM) -> Solana (SVM)');
     logger.divider();
 
-    // Configuration
+    // 1. Configuration
     const sourceChain = KanaChainID.Arbitrum;
     const targetChain = KanaChainID.Solana;
-    const amount = '30000'; // 0.04 USDC (6 decimals)
+    const amount = '100000'; // 0.1 USDC (6 decimals)
 
     const userAddress = walletManager.getAddress(sourceChain);
-    const recipientAddress = walletManager.getAddress(targetChain);
+    const recipientAddress = process.env.SOLANA_PUBLIC_KEY || walletManager.getAddress(targetChain);
 
-    logger.info(`Source Chain: Arbitrum (ID: ${sourceChain})`);
-    logger.info(`Target Chain: Solana (ID: ${targetChain})`);
+    logger.info(`Route: Arbitrum (11) -> Solana (1)`);
     logger.info(`User Address: ${userAddress}`);
-    logger.info(`Amount: 0.04 USDC`);
+    logger.info(`Recipient Address: ${recipientAddress}`);
 
-    // Step 1: Get Quote
-    logger.step(1, 'Fetching cross-chain quote');
+    // ---------------------------------------------------------
+    // STEP 1: GET QUOTE
+    // ---------------------------------------------------------
+    logger.step(1, 'Fetching cross-chain quote...');
 
     const quoteParams: QuoteParams = {
       userAddress,
@@ -45,61 +47,87 @@ async function main() {
     };
 
     const quote = await apiClient.getQuote(quoteParams);
-    const transaction = quote.data.transaction;
-    if (transaction.kind !== 'evm') {
-      throw new Error(`Expected EVM transaction, got ${transaction.kind}`);
+    const quoteData = quote.data;
+    const txExecution = quoteData.transaction;
+
+    if (txExecution.kind !== 'evm') {
+      throw new Error(`Expected EVM transaction for source, got ${txExecution.kind}`);
     }
 
-    // Step 2: Send Approval (if needed)
-    logger.step(2, 'Handling token approval');
-    if (transaction.approval) {
-      logger.info('Approval required - sending approval transaction...');
-      const approvalTxHash = await walletManager.sendEVMTransaction(
-        sourceChain,
-        transaction.approval.data
-      );
-      logger.success(`Approval confirmed: ${approvalTxHash}`);
-    } else {
-      logger.info('No approval needed');
-    }
+    logger.success(`Quote Received! ID: ${quoteData.requestId}`);
 
-    // Step 3: Execute main transaction
-    logger.step(3, 'Executing cross-chain transaction');
+    // ---------------------------------------------------------
+    // STEP 2: SIGN & SEND SOURCE TRANSACTION
+    // ---------------------------------------------------------
+    logger.step(2, 'Signing & Sending Source Transaction (Arbitrum)...');
+
     const txHash = await walletManager.sendEVMTransaction(
       sourceChain,
-      transaction.execution.data
+      {
+        to: txExecution.execution.data.to,
+        data: txExecution.execution.data.data,
+        value: txExecution.execution.data.value,
+        chainId: sourceChain,
+      }
     );
 
-    logger.success(`Transaction sent: ${txHash}`);
+    logger.success(`Source Transaction Confirmed! Hash: ${txHash}`);
 
-    // Step 4: Poll status
-    logger.step(4, 'Polling transaction status');
+    // ---------------------------------------------------------
+    // STEP 3: SIGN AUTH MESSAGE
+    // ---------------------------------------------------------
+    logger.step(3, 'Signing Auth Message for status polling...');
+
+    const wallet = walletManager.getEVMWallet(sourceChain);
+    const authMessage = (quoteData as any).auth?.message;
+
+    if (!authMessage) {
+      throw new Error("Auth message missing in quote data.");
+    }
+
+    const signature = await wallet.signMessage(authMessage);
+    logger.success('Auth Signature generated successfully');
+
+    // ---------------------------------------------------------
+    // STEP 4: POLL STATUS
+    // ---------------------------------------------------------
+    logger.step(4, 'Polling Multi-Hop Status...');
 
     const statusParams: StatusParams = {
-      requestId: quote.data.requestId,
-      txHash,
-      userAddress,
-      recipientAddress,
-      amount,
+      requestId: quoteData.requestId,
+      txHash: txHash,
+      userAddress: userAddress,
+      recipientAddress: recipientAddress,
+      amount: quoteData.amounts.amountOut, // Passing amountOut from quote
       sourceChainId: sourceChain,
       targetChainId: targetChain,
       targetTokenAddress: USDC_TOKENS[targetChain].address,
+      authSignature: signature, // Using the signature generated in Step 3
     };
 
     const finalStatus = await apiClient.pollStatus(statusParams);
 
-    // Success
+    // ---------------------------------------------------------
+    // FINISHED
+    // ---------------------------------------------------------
     logger.divider();
-    logger.success('Cross-chain transfer completed successfully!');
-    logger.info(`Transaction ID: ${finalStatus.data.transactionId}`);
-    logger.info(`Transaction Hash: ${finalStatus.data.txHash}`);
-    logger.info(`Final Status: ${finalStatus.data.status}`);
+    if (finalStatus.data.status === 'COMPLETED') {
+      logger.success('🎉 SUCCESS! Bridge to Solana Completed.');
+    } else {
+      logger.error(`Transfer finished with status: ${finalStatus.data.status}`);
+    }
+    logger.info(`Final Tx Hash: ${finalStatus.data.txHash}`);
     logger.divider();
+
   } catch (error: any) {
-    logger.error('Cross-chain transfer failed:', error.message);
+    logger.error('Test Execution Failed:');
+    if (error.response) {
+      console.error(JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.error(error.message);
+    }
     process.exit(1);
   }
 }
 
-// Run the example
 main();

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import {
   KanaChainID,
   USDC_TOKENS,
@@ -15,75 +16,111 @@ async function main() {
 
   try {
     logger.divider();
-    logger.info('Cross-Chain Transfer: Aptos -> Arbitrum (MVM to EVM)');
+    logger.info('🚀 Starting Multi-Hop Test: Aptos (MVM) -> Arbitrum (EVM)');
     logger.divider();
 
-    // Configuration
+    // 1. Configuration
     const sourceChain = KanaChainID.Aptos;
     const targetChain = KanaChainID.Arbitrum;
-    const amount = '10000'; // 0.04 USDC (6 decimals)
+    const amount = '10000000'; // 0.1 APT (8 decimals) as per ref file
 
     const userAddress = walletManager.getAddress(sourceChain);
-    const recipientAddress = walletManager.getAddress(targetChain);
+    const recipientAddress = process.env.EVM_SOURCE_PUBLIC_KEY || walletManager.getAddress(targetChain);
 
-    logger.info(`Source Chain: Aptos (ID: ${sourceChain})`);
-    logger.info(`Target Chain: Arbitrum (ID: ${targetChain})`);
-    logger.info(`User Address: ${userAddress}`);
-    logger.info(`Amount: 0.04 USDC`);
+    logger.info(`Source: Aptos | Target: Arbitrum`);
+    logger.info(`User: ${userAddress}`);
+    logger.info(`Recipient: ${recipientAddress}`);
 
-    // Step 1: Get Quote
-    logger.step(1, 'Fetching cross-chain quote');
+    // ---------------------------------------------------------
+    // STEP 1: GET QUOTE
+    // ---------------------------------------------------------
+    logger.step(1, 'Fetching cross-chain quote...');
 
     const quoteParams: QuoteParams = {
       userAddress,
       amount,
       sourceChainId: sourceChain,
       targetChainId: targetChain,
-      sourceTokenAddress: USDC_TOKENS[sourceChain].address,
+      sourceTokenAddress: '0x1::aptos_coin::AptosCoin', // APT Native
       targetTokenAddress: USDC_TOKENS[targetChain].address,
       recipientAddress,
     };
 
     const quote = await apiClient.getQuote(quoteParams);
-    // Validate transaction type
-    const transaction = quote.data.transaction;
-    if (transaction.kind !== 'aptos') {
-      throw new Error(`Expected Aptos transaction, got ${transaction.kind}`);
+    const quoteData = quote.data;
+    const txExecution = quoteData.transaction;
+
+    logger.success(`Quote Received! ID: ${quoteData.requestId}`);
+
+    // ---------------------------------------------------------
+    // STEP 2: EXECUTE APTOS TRANSACTION
+    // ---------------------------------------------------------
+    logger.step(2, 'Processing Aptos Transaction...');
+    let txHash: string;
+
+    if (txExecution.kind === 'aptos-serialized') {
+        txHash = await walletManager.sendAptosSerializedTransaction(
+            sourceChain, 
+            txExecution.execution.data.raw_transaction
+        );
+    } else {
+        throw new Error(`Unexpected transaction kind: ${txExecution.kind}`);
     }
 
-    // Step 2: Execute Aptos transaction
-    logger.step(2, 'Executing cross-chain transaction on Aptos');
-    const txHash = await walletManager.sendAptosTransaction(sourceChain, transaction.execution.data);
-    logger.success(`Transaction sent: ${txHash}`);
+    // ---------------------------------------------------------
+    // STEP 3: SIGN AUTH MESSAGE
+    // ---------------------------------------------------------
+    logger.step(3, 'Signing Auth Message for status polling...');
 
-    // Step 4: Poll status
-    logger.step(4, 'Polling transaction status');
+    const account = walletManager.getAptosAccount();
+    const authMessage = (quoteData as any).auth?.message;
+    
+    if (!authMessage) throw new Error("Auth message missing in quote");
+
+    const messageBytes = new TextEncoder().encode(authMessage);
+    const signed = account.sign(messageBytes);
+    const signature = signed.toString(); // Hex string
+    const publicKey = account.publicKey.toString();
+
+
+    logger.success('Aptos Auth Signature generated');
+
+    // ---------------------------------------------------------
+    // STEP 4: POLL STATUS
+    // ---------------------------------------------------------
+    logger.step(4, 'Polling Status...');
 
     const statusParams: StatusParams = {
-      requestId: quote.data.requestId,
-      txHash,
-      userAddress,
-      recipientAddress,
-      amount,
+      requestId: quoteData.requestId,
+      txHash: txHash,
+      userAddress: userAddress,
+      recipientAddress: recipientAddress,
+      amount: quoteData.amounts.amountOut,
       sourceChainId: sourceChain,
       targetChainId: targetChain,
       targetTokenAddress: USDC_TOKENS[targetChain].address,
-    };
+      authSignature: signature,
+      authPublicKey: publicKey, 
+    } as any; 
 
     const finalStatus = await apiClient.pollStatus(statusParams);
 
-    // Success
+    // ---------------------------------------------------------
+    // FINISHED
+    // ---------------------------------------------------------
     logger.divider();
-    logger.success('Cross-chain transfer completed successfully!');
-    logger.info(`Transaction ID: ${finalStatus.data.transactionId}`);
-    logger.info(`Transaction Hash: ${finalStatus.data.txHash}`);
-    logger.info(`Final Status: ${finalStatus.data.status}`);
+    if (finalStatus.data.status === 'COMPLETED') {
+      logger.success('🎉 SUCCESS! Bridge Completed.');
+    } else {
+      logger.error(`Failed with status: ${finalStatus.data.status}`);
+    }
     logger.divider();
+
   } catch (error: any) {
-    logger.error('Cross-chain transfer failed:', error.message);
+    logger.error('Cross-chain transfer failed:');
+    console.error(error.message);
     process.exit(1);
   }
 }
 
-// Run the example
 main();
