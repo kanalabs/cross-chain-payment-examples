@@ -63,12 +63,7 @@ async function main() {
 
     const txHash = await walletManager.sendEVMTransaction(
       sourceChain,
-      {
-        to: txExecution.execution.data.to,
-        data: txExecution.execution.data.data,
-        value: txExecution.execution.data.value,
-        chainId: sourceChain,
-      }
+      txExecution.execution.data
     );
 
     logger.success(`Source Transaction Confirmed! Hash: ${txHash}`);
