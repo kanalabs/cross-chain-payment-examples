@@ -50,29 +50,36 @@ export class CrossChainAPIClient {
     }
   }
 
-  async getStatus(params: StatusParams): Promise<StatusResponse> {
-    try {
-      const queryParams = new URLSearchParams({
-        requestId: params.requestId,
-        txHash: params.txHash,
-        userAddress: params.userAddress,
-        recipientAddress: params.recipientAddress,
-        amount: params.amount,
-        sourceChainId: params.sourceChainId.toString(),
-        targetChainId: params.targetChainId.toString(),
-        targetTokenAddress: params.targetTokenAddress,
-      });
+async getStatus(params: StatusParams): Promise<StatusResponse> {
+  try {
+    const queryParams: any = {
+      requestId: params.requestId,
+      txHash: params.txHash,
+      userAddress: params.userAddress,
+      recipientAddress: params.recipientAddress,
+      amount: params.amount,
+      sourceChainId: params.sourceChainId.toString(),
+      targetChainId: params.targetChainId.toString(),
+      targetTokenAddress: params.targetTokenAddress,
+      authSignature: params.authSignature
+    };
 
-      const response = await this.client.get<StatusResponse>(
-        `${API_CONFIG.STATUS_ENDPOINT}?${queryParams.toString()}`
-      );
-
-      return response.data;
-    } catch (error: any) {
-      this.logger.error('Failed to fetch status:', error.response?.data || error.message);
-      throw error;
+    const aptosKey = (params as any).authPublicKey;
+    if (aptosKey) {
+      queryParams.authPublicKey = aptosKey;
     }
+
+    const response = await this.client.get<StatusResponse>(
+      API_CONFIG.STATUS_ENDPOINT, 
+      { params: queryParams }
+    );
+
+    return response.data;
+  } catch (error: any) {
+    this.logger.error('Failed to fetch status:', error.response?.data || error.message);
+    throw error;
   }
+}
 
   async pollStatus(params: StatusParams): Promise<StatusResponse> {
     let attempt = 0;
