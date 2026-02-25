@@ -77,7 +77,8 @@ async function main() {
     
     if (!authMessage) throw new Error("Auth message missing in quote");
 
-    const messageBytes = new TextEncoder().encode(authMessage);
+const fullMessage = `APTOS\nmessage: ${authMessage}\nnonce: `;
+const messageBytes = new TextEncoder().encode(fullMessage);
     const signed = account.sign(messageBytes);
     const signature = signed.toString(); // Hex string
     const publicKey = account.publicKey.toString();
