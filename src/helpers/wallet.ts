@@ -48,6 +48,7 @@ export class WalletManager {
     const increasedGasLimit = Math.ceil(originalGasLimit + increaseAmount);
     return increasedGasLimit;
   }
+  
   async sendEVMTransaction(
     chainId: KanaChainID,
     txData: TransactionData
@@ -60,19 +61,19 @@ export class WalletManager {
         to: txData.to,
         data: txData.data,
         value: txData.value || '0',
+        gasLimit: txData.gasLimit ? ethers.BigNumber.from(txData.gasLimit) : undefined,
+        maxFeePerGas: txData.maxFeePerGas ? ethers.BigNumber.from(txData.maxFeePerGas) : undefined,
+        maxPriorityFeePerGas: txData.maxPriorityFeePerGas ? ethers.BigNumber.from(txData.maxPriorityFeePerGas) : undefined,
       };
 
-      const estimatedGas = await wallet.estimateGas(tx);
-      const gasLimit = this.increaseGasLimit(estimatedGas, 0.2);
-
       this.logger.info(
-        `Sending tx on ${CHAIN_CONFIGS[chainId].name} (gas: ${gasLimit.toString()})...`
+        `Sending tx on ${CHAIN_CONFIGS[chainId].name} (gas: ${tx.gasLimit?.toString() || 'default'})...`
       );
 
       // Send transaction
       const txResponse = await wallet.sendTransaction({
         ...tx,
-        gasLimit,
+        gasLimit: tx.gasLimit || undefined,
       });
 
       this.logger.info(`✓ Sent: ${txResponse.hash}`);

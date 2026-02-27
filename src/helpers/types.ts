@@ -100,6 +100,8 @@ export interface TransactionData {
   value: string;
   chainId: number;
   gasLimit?: string;
+  maxFeePerGas?: string;
+  maxPriorityFeePerGas?: string;
 }
 
 export interface StatusParams {

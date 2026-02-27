@@ -61,6 +61,11 @@ async function main() {
     // ---------------------------------------------------------
     logger.step(2, 'Signing & Sending Source Transaction (Arbitrum)...');
 
+    await walletManager.sendApprovalIfNeeded(
+      sourceChain,
+      txExecution.approval?.data || null,
+    );
+
     const txHash = await walletManager.sendEVMTransaction(
       sourceChain,
       txExecution.execution.data
