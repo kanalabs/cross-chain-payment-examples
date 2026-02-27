@@ -16,11 +16,11 @@ async function main() {
 
   try {
     logger.divider();
-    logger.info("🚀 Starting Multi-Hop Test: Arbitrum (EVM) -> Aptos (MVM)");
+    logger.info("🚀 Starting Multi-Hop Test: Polygon (EVM) -> Aptos (MVM)");
     logger.divider();
 
     // 1. Configuration
-    const sourceChain = KanaChainID.Arbitrum;
+    const sourceChain = KanaChainID.Polygon;
     const targetChain = KanaChainID.Aptos;
     const amount = "100000"; // 0.1 USDC (6 decimals)
 
@@ -29,7 +29,7 @@ async function main() {
       process.env.APTOS_TARGET_PUBLIC_KEY ||
       walletManager.getAddress(targetChain);
 
-    logger.info(`Route: Arbitrum (11) -> Aptos (2)`);
+    logger.info(`Route: Polygon (3) -> Aptos (2)`);
     logger.info(`Source User: ${userAddress}`);
     logger.info(`Target Recipient: ${recipientAddress}`);
 
@@ -61,9 +61,9 @@ async function main() {
     logger.success(`Quote Received! RequestID: ${quoteData.requestId}`);
 
     // ---------------------------------------------------------
-    // STEP 2: SIGN & SEND SOURCE TRANSACTION (Arbitrum)
+    // STEP 2: SIGN & SEND SOURCE TRANSACTION (Polygon)
     // ---------------------------------------------------------
-    logger.step(2, "Signing & Sending Source Transaction (Arbitrum)...");
+    logger.step(2, "Signing & Sending Source Transaction (Polygon)...");
 
     await walletManager.sendApprovalIfNeeded(
       sourceChain,
@@ -97,7 +97,7 @@ async function main() {
     // ---------------------------------------------------------
     // STEP 4: POLL STATUS
     // ---------------------------------------------------------
-    logger.step(4, "Polling Multi-Hop Status (Arbitrum -> [Avax] -> Aptos)...");
+    logger.step(4, "Polling Multi-Hop Status (Polygon -> [Avax] -> Aptos)...");
 
     const statusParams: StatusParams = {
       requestId: quoteData.requestId,
