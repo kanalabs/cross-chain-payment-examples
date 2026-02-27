@@ -19,18 +19,18 @@ async function main() {
 
   try {
     logger.divider();
-    logger.info('🚀 Starting Multi-Hop Test: Solana (SVM) -> Arbitrum (EVM)');
+    logger.info('🚀 Starting Multi-Hop Test: Solana (SVM) -> Polygon (EVM)');
     logger.divider();
 
     // 1. Configuration
     const sourceChain = KanaChainID.Solana;
-    const targetChain = KanaChainID.Arbitrum;
-    const amount = '100000'; // 0.1 USDC (6 decimals)
+    const targetChain = KanaChainID.Polygon;
+    const amount = '1500000'; // 0.0015 sol (6 decimals)
 
     const userAddress = walletManager.getAddress(sourceChain);
     const recipientAddress = process.env.EVM_SOURCE_PUBLIC_KEY || walletManager.getAddress(targetChain);
 
-    logger.info(`Route: Solana (1) -> Arbitrum (11)`);
+    logger.info(`Route: Solana (1) -> Polygon (137)`);
     logger.info(`Source User: ${userAddress}`);
     logger.info(`Target Recipient: ${recipientAddress}`);
 
@@ -44,7 +44,7 @@ async function main() {
       amount,
       sourceChainId: sourceChain,
       targetChainId: targetChain,
-      sourceTokenAddress: USDC_TOKENS[sourceChain].address,
+      sourceTokenAddress: '11111111111111111111111111111111',
       targetTokenAddress: USDC_TOKENS[targetChain].address,
       recipientAddress,
     };
@@ -92,7 +92,7 @@ async function main() {
     // ---------------------------------------------------------
     // STEP 4: POLL STATUS
     // ---------------------------------------------------------
-    logger.step(4, 'Polling Multi-Hop Status (Solana -> Arbitrum)...');
+    logger.step(4, 'Polling Multi-Hop Status (Solana -> Polygon)...');
 
     const statusParams: StatusParams = {
       requestId: quoteData.requestId,
@@ -113,7 +113,7 @@ async function main() {
     // ---------------------------------------------------------
     logger.divider();
     if (finalStatus.data.status === 'COMPLETED') {
-      logger.success('🎉 SUCCESS! Bridge to Arbitrum Completed.');
+      logger.success('🎉 SUCCESS! Bridge to Polygon Completed.');
     } else {
       logger.error(`Transfer finished with status: ${finalStatus.data.status}`);
     }
