@@ -13,7 +13,7 @@ import {
   SimpleTransaction,
 } from '@aptos-labs/ts-sdk';
 import bs58 from 'bs58';
-import { CHAIN_CONFIGS, WALLET_CONFIG } from './config';
+import { CHAIN_CONFIGS, WALLET_CONFIG, CHAIN_GAS_CONFIG } from './config';
 import { TransactionData, KanaChainID } from './types';
 import { Logger } from './logger';
 
@@ -48,48 +48,72 @@ export class WalletManager {
     const increasedGasLimit = Math.ceil(originalGasLimit + increaseAmount);
     return increasedGasLimit;
   }
-  async sendEVMTransaction(
-    chainId: KanaChainID,
-    txData: TransactionData
-  ): Promise<string> {
-    try {
-      const wallet = this.getEVMWallet(chainId);
+  
+async sendEVMTransaction(
+  chainId: KanaChainID,
+  txData: TransactionData
+): Promise<string> {
+  try {
+    const wallet = this.getEVMWallet(chainId);
 
-      // Build transaction
-      const tx = {
-        to: txData.to,
-        data: txData.data,
-        value: txData.value || '0',
-      };
+    // Fetch live fee data from network
+    const feeData = await wallet.provider!.getFeeData();
 
-      const estimatedGas = await wallet.estimateGas(tx);
-      const gasLimit = this.increaseGasLimit(estimatedGas, 0.2);
+    // Helper: pick the highest BigNumber from a list
+    const pickHighest = (...vals: (ethers.BigNumber | null | undefined)[]): ethers.BigNumber => {
+      return vals
+        .filter((v): v is ethers.BigNumber => !!v && ethers.BigNumber.isBigNumber(v))
+        .reduce((max, v) => (v.gt(max) ? v : max), ethers.BigNumber.from(0));
+    };
 
-      this.logger.info(
-        `Sending tx on ${CHAIN_CONFIGS[chainId].name} (gas: ${gasLimit.toString()})...`
-      );
+    // Chain-specific minimum floor from config, fallback to 1 gwei
+    const chainFloor = CHAIN_GAS_CONFIG[chainId as number]
+      ? ethers.BigNumber.from(CHAIN_GAS_CONFIG[chainId as number])
+      : ethers.utils.parseUnits('1', 'gwei');
 
-      // Send transaction
-      const txResponse = await wallet.sendTransaction({
-        ...tx,
-        gasLimit,
-      });
+    const maxPriorityFeePerGas = pickHighest(
+      txData.maxPriorityFeePerGas ? ethers.BigNumber.from(txData.maxPriorityFeePerGas) : null,
+      feeData.maxPriorityFeePerGas,
+      chainFloor,
+    );
 
-      this.logger.info(`✓ Sent: ${txResponse.hash}`);
+    // maxFeePerGas must always be >= maxPriorityFeePerGas
+    const maxFeePerGas = pickHighest(
+      txData.maxFeePerGas ? ethers.BigNumber.from(txData.maxFeePerGas) : null,
+      feeData.maxFeePerGas,
+      maxPriorityFeePerGas,
+    );
 
-      // Wait for confirmation
-      const receipt = await txResponse.wait();
+    const tx: Record<string, any> = {
+      to: txData.to,
+      data: txData.data,
+      value: txData.value || '0',
+      maxFeePerGas,
+      maxPriorityFeePerGas,
+    };
 
-      this.logger.success(
-        `✓ Confirmed in block ${receipt.blockNumber} (used ${receipt.gasUsed.toString()} gas)`
-      );
-
-      return txResponse.hash;
-    } catch (error: any) {
-      this.logger.error(`Transaction failed: ${error.message}`);
-      throw error;
+    if (txData.gasLimit && txData.gasLimit !== '0') {
+      tx.gasLimit = ethers.BigNumber.from(txData.gasLimit);
     }
+
+    this.logger.info(
+      `Sending tx on ${CHAIN_CONFIGS[chainId].name} | chainId: ${chainId} | priorityFee: ${ethers.utils.formatUnits(maxPriorityFeePerGas, 'gwei')} gwei | maxFee: ${ethers.utils.formatUnits(maxFeePerGas, 'gwei')} gwei`
+    );
+
+    const txResponse = await wallet.sendTransaction(tx);
+    this.logger.info(`✓ Sent: ${txResponse.hash}`);
+
+    const receipt = await txResponse.wait();
+    this.logger.success(
+      `✓ Confirmed in block ${receipt.blockNumber} (used ${receipt.gasUsed.toString()} gas)`
+    );
+
+    return txResponse.hash;
+  } catch (error: any) {
+    this.logger.error(`Transaction failed: ${error.message}`);
+    throw error;
   }
+}
 
   private increaseGasLimit(
     gasLimit: ethers.BigNumber,

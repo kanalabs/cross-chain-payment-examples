@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import "dotenv/config";
 import {
   KanaChainID,
   USDC_TOKENS,
@@ -7,34 +7,36 @@ import {
   WalletManager,
   QuoteParams,
   StatusParams,
-} from './helpers';
+} from "./helpers";
 
 async function main() {
-  const logger = new Logger('EVM-to-MVM');
+  const logger = new Logger("EVM-to-MVM");
   const apiClient = new CrossChainAPIClient();
   const walletManager = new WalletManager();
 
   try {
     logger.divider();
-    logger.info('🚀 Starting Multi-Hop Test: Arbitrum (EVM) -> Aptos (MVM)');
+    logger.info("🚀 Starting Multi-Hop Test: Polygon (EVM) -> Aptos (MVM)");
     logger.divider();
 
     // 1. Configuration
-    const sourceChain = KanaChainID.Arbitrum;
+    const sourceChain = KanaChainID.Polygon;
     const targetChain = KanaChainID.Aptos;
-    const amount = '100000'; // 0.1 USDC (6 decimals)
+    const amount = "100000"; // 0.1 USDC (6 decimals)
 
     const userAddress = walletManager.getAddress(sourceChain);
-    const recipientAddress = process.env.APTOS_TARGET_PUBLIC_KEY || walletManager.getAddress(targetChain);
+    const recipientAddress =
+      process.env.APTOS_TARGET_PUBLIC_KEY ||
+      walletManager.getAddress(targetChain);
 
-    logger.info(`Route: Arbitrum (11) -> Aptos (2)`);
+    logger.info(`Route: Polygon (3) -> Aptos (2)`);
     logger.info(`Source User: ${userAddress}`);
     logger.info(`Target Recipient: ${recipientAddress}`);
 
     // ---------------------------------------------------------
     // STEP 1: GET QUOTE
     // ---------------------------------------------------------
-    logger.step(1, 'Fetching cross-chain quote...');
+    logger.step(1, "Fetching cross-chain quote...");
 
     const quoteParams: QuoteParams = {
       userAddress,
@@ -50,20 +52,27 @@ async function main() {
     const quoteData = quote.data;
     const txExecution = quoteData.transaction;
 
-    if (txExecution.kind !== 'evm') {
-      throw new Error(`Expected EVM transaction for source, got ${txExecution.kind}`);
+    if (txExecution.kind !== "evm") {
+      throw new Error(
+        `Expected EVM transaction for source, got ${txExecution.kind}`,
+      );
     }
 
     logger.success(`Quote Received! RequestID: ${quoteData.requestId}`);
 
     // ---------------------------------------------------------
-    // STEP 2: SIGN & SEND SOURCE TRANSACTION (Arbitrum)
+    // STEP 2: SIGN & SEND SOURCE TRANSACTION (Polygon)
     // ---------------------------------------------------------
-    logger.step(2, 'Signing & Sending Source Transaction (Arbitrum)...');
+    logger.step(2, "Signing & Sending Source Transaction (Polygon)...");
+
+    await walletManager.sendApprovalIfNeeded(
+      sourceChain,
+      txExecution.approval?.data || null,
+    );
 
     const txHash = await walletManager.sendEVMTransaction(
       sourceChain,
-      txExecution.execution.data
+      txExecution.execution.data,
     );
 
     logger.success(`Source Transaction Confirmed! Hash: ${txHash}`);
@@ -71,22 +80,24 @@ async function main() {
     // ---------------------------------------------------------
     // STEP 3: SIGN AUTH MESSAGE
     // ---------------------------------------------------------
-    logger.step(3, 'Signing Auth Message for status polling...');
+    logger.step(3, "Signing Auth Message for status polling...");
 
     const wallet = walletManager.getEVMWallet(sourceChain);
     const authMessage = (quoteData as any).auth?.message;
 
     if (!authMessage) {
-      throw new Error("Auth message not found in quote data. This is required for multi-hop.");
+      throw new Error(
+        "Auth message not found in quote data. This is required for multi-hop.",
+      );
     }
 
     const signature = await wallet.signMessage(authMessage);
-    logger.success('Auth Signature generated');
+    logger.success("Auth Signature generated");
 
     // ---------------------------------------------------------
     // STEP 4: POLL STATUS
     // ---------------------------------------------------------
-    logger.step(4, 'Polling Multi-Hop Status (Arbitrum -> [Avax] -> Aptos)...');
+    logger.step(4, "Polling Multi-Hop Status (Polygon -> [Avax] -> Aptos)...");
 
     const statusParams: StatusParams = {
       requestId: quoteData.requestId,
@@ -106,16 +117,15 @@ async function main() {
     // FINISHED
     // ---------------------------------------------------------
     logger.divider();
-    if (finalStatus.data.status === 'COMPLETED') {
-      logger.success('🎉 MULTI-HOP SUCCESS! Funds delivered to Aptos.');
+    if (finalStatus.data.status === "COMPLETED") {
+      logger.success("🎉 MULTI-HOP SUCCESS! Funds delivered to Aptos.");
     } else {
       logger.error(`Transfer finished with status: ${finalStatus.data.status}`);
     }
     logger.info(`Aptos Tx Hash: ${finalStatus.data.txHash}`);
     logger.divider();
-
   } catch (error: any) {
-    logger.error('Test Execution Failed:');
+    logger.error("Test Execution Failed:");
     if (error.response) {
       console.error(JSON.stringify(error.response.data, null, 2));
     } else {

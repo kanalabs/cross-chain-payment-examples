@@ -8,6 +8,14 @@ export const API_CONFIG = {
   STATUS_ENDPOINT: '/v2/cross-chain/status',
 };
 
+export const CHAIN_GAS_CONFIG: Record<number, string> = {
+  3:  '30000000000', // Polygon   (KanaChainID.Polygon = 3)    — 30 gwei
+  6:  '3000000000',  // Ethereum  (KanaChainID.Ethereum = 6)   — 3 gwei
+  7:  '10000000',     // Base      (KanaChainID.Base = 7)       — 0.01 gwei
+  10: '25000000000', // Avalanche (KanaChainID.Avalanche = 10) — 25 gwei
+  11: '500000000',   // Arbitrum  (KanaChainID.Arbitrum = 11)  — 0.5 gwei
+};
+
 export const POLLING_CONFIG = {
   INITIAL_DELAY: 3000, // 3 seconds
   MAX_DELAY: 10000, // 10 seconds
