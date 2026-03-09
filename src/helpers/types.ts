@@ -151,6 +151,8 @@ export enum KanaChainID {
   Solana = 1,
   Aptos = 2,
   Polygon = 3,
+  Bsc = 4,
+  Sui = 5,
   Ethereum = 6,
   Base = 7,
   Avalanche = 10,

@@ -20,9 +20,9 @@ async function main() {
     logger.divider();
 
     // 1. Configuration
-    const sourceChain = KanaChainID.Polygon;
+    const sourceChain = KanaChainID.Bsc;
     const targetChain = KanaChainID.Aptos;
-    const amount = "100000"; // 0.1 USDC (6 decimals)
+    const amount = "100000000000000000"; // 0.1 USDC (18 decimals)
 
     const userAddress = walletManager.getAddress(sourceChain);
     const recipientAddress =
