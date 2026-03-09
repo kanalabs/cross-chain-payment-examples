@@ -9,9 +9,10 @@ export const API_CONFIG = {
 };
 
 export const CHAIN_GAS_CONFIG: Record<number, string> = {
-  3:  '30000000000', // Polygon   (KanaChainID.Polygon = 3)    — 30 gwei
-  6:  '3000000000',  // Ethereum  (KanaChainID.Ethereum = 6)   — 3 gwei
-  7:  '10000000',     // Base      (KanaChainID.Base = 7)       — 0.01 gwei
+  3: '30000000000', // Polygon   (KanaChainID.Polygon = 3)    — 30 gwei
+  4: '500000000',  // BSC       (KanaChainID.Bsc = 4)        — 5 gwei
+  6: '3000000000',  // Ethereum  (KanaChainID.Ethereum = 6)   — 3 gwei
+  7: '10000000',     // Base      (KanaChainID.Base = 7)       — 0.01 gwei
   10: '25000000000', // Avalanche (KanaChainID.Avalanche = 10) — 25 gwei
   11: '500000000',   // Arbitrum  (KanaChainID.Arbitrum = 11)  — 0.5 gwei
 };
@@ -53,6 +54,17 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     nativeCurrency: {
       name: 'MATIC',
       symbol: 'MATIC',
+      decimals: 18,
+    },
+  },
+  [KanaChainID.Bsc]: {
+    chainId: KanaChainID.Bsc,
+    name: 'BSC',
+    type: 'EVM',
+    rpcUrl: process.env.BSC_RPC || 'https://bsc-dataseed.binance.org/',
+    nativeCurrency: {
+      name: 'BSC',
+      symbol: 'BNB',
       decimals: 18,
     },
   },
@@ -120,6 +132,12 @@ export const USDC_TOKENS: Record<number, TokenConfig> = {
     address: '0x2791bca1f2de4661ed88a30c99a7a9449aa84174',
     symbol: 'USDC',
     decimals: 6,
+    name: 'USD Coin',
+  },
+  [KanaChainID.Bsc]: {
+    address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+    symbol: 'USDC',
+    decimals: 18,
     name: 'USD Coin',
   },
   [KanaChainID.Ethereum]: {
