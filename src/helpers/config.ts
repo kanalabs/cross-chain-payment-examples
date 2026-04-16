@@ -112,6 +112,17 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
       decimals: 18,
     },
   },
+  [KanaChainID.Ton]: {
+    chainId: KanaChainID.Ton,
+    name: 'TON',
+    type: 'TON',
+    rpcUrl: process.env.TON_RPC || process.env.TONCENTER_API_URL || 'https://toncenter.com/api/v2/jsonRPC',
+    nativeCurrency: {
+      name: 'Toncoin',
+      symbol: 'TON',
+      decimals: 9,
+    },
+  },
 };
 
 
@@ -166,8 +177,31 @@ export const USDC_TOKENS: Record<number, TokenConfig> = {
   },
 };
 
+export const USDT_TOKENS: Partial<Record<number, TokenConfig>> = {
+  [KanaChainID.Solana]: {
+    address: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+    symbol: 'USDT',
+    decimals: 6,
+    name: 'Tether USD',
+  },
+  [KanaChainID.Polygon]: {
+    address: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+    symbol: 'USDT',
+    decimals: 6,
+    name: 'Tether USD',
+  },
+  [KanaChainID.Ton]: {
+    address: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs',
+    symbol: 'USDT',
+    decimals: 6,
+    name: 'Tether USD',
+  },
+};
+
 export const WALLET_CONFIG = {
   EVM_PRIVATE_KEY: process.env.EVM_MAIN_PRIVATE_KEY || '',
   SOLANA_PRIVATE_KEY: process.env.SOLANA_PRIVATE_KEY || '',
   APTOS_PRIVATE_KEY: process.env.APTOS_PRIVATE_KEY || '',
+  TON_MNEMONIC: process.env.TON_MNEMONIC || process.env.MNEMONIC || '',
+  TONCENTER_API_KEY: process.env.TONCENTER_API_KEY || '',
 };

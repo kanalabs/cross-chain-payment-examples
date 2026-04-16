@@ -41,7 +41,10 @@ export class CrossChainAPIClient {
       this.logger.info(`Request ID: ${response.data.data.requestId}`);
       this.logger.info(`Amount In: ${response.data.data.amounts.amountInFormatted} ${response.data.data.tokens.sourceSymbol}`);
       this.logger.info(`Amount Out: ${response.data.data.amounts.amountOutFormatted} ${response.data.data.tokens.targetSymbol}`);
-      this.logger.info(`Total Fees: $${response.data.data.fees.totalUsd}`);
+      const feeUsd = response.data.data.fees.totalUsd ?? response.data.data.fees.amountUsd;
+      if (feeUsd !== undefined && feeUsd !== null) {
+        this.logger.info(`Total Fees: $${feeUsd}`);
+      }
 
       return response.data;
     } catch (error: any) {
@@ -64,9 +67,8 @@ async getStatus(params: StatusParams): Promise<StatusResponse> {
       authSignature: params.authSignature
     };
 
-    const aptosKey = (params as any).authPublicKey;
-    if (aptosKey) {
-      queryParams.authPublicKey = aptosKey;
+    if (params.authPublicKey) {
+      queryParams.authPublicKey = params.authPublicKey;
     }
 
     const response = await this.client.get<StatusResponse>(

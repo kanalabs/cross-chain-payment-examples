@@ -11,7 +11,7 @@ export interface QuoteParams {
 interface BaseQuoteResponse {
   requestId: string;
   quoteId: string;
-  integrator: 'relay' | 'kana-aggregator';
+  integrator: string;
   chains: {
     source: number;
     target: number;
@@ -31,10 +31,16 @@ interface BaseQuoteResponse {
     amountOutFormatted: string;
   };
   fees: {
-    gas: string | null;
-    relayer: string;
+    gas?: string | null;
+    relayer?: string;
+    amount?: string;
+    amountFormatted?: string;
+    amountUsd?: number;
     currency: string;
-    totalUsd: number | null;
+    totalUsd?: number | null;
+  };
+  auth?: {
+    message: string;
   };
 }
 
@@ -82,7 +88,21 @@ interface EVMTransaction {
   };
 }
 
-type Transaction = SolanaTransaction | AptosTransaction | EVMTransaction;
+export interface TonTransactionData {
+  to: string;
+  value: string;
+  body: string;
+}
+
+interface TonTransaction {
+  kind: 'ton';
+  execution: {
+    description: string;
+    data: TonTransactionData;
+  };
+}
+
+type Transaction = SolanaTransaction | AptosTransaction | EVMTransaction | TonTransaction;
 
 export type QuoteData = BaseQuoteResponse & {
   transaction: Transaction;
@@ -114,7 +134,7 @@ export interface StatusParams {
   targetChainId: number;
   targetTokenAddress: string;
   authSignature: string;
-  authPublicKey?: string; // Optional, only needed for certain chains like Aptos
+  authPublicKey?: string; // Optional, used by chains where the address does not encode the public key
 }
 
 export interface StatusResponse {
@@ -157,12 +177,13 @@ export enum KanaChainID {
   Base = 7,
   Avalanche = 10,
   Arbitrum = 11,
+  Ton = 14,
 }
 
 export interface ChainConfig {
   chainId: KanaChainID;
   name: string;
-  type: 'EVM' | 'SVM' | 'MVM';
+  type: 'EVM' | 'SVM' | 'MVM' | 'TON';
   rpcUrl: string;
   nativeCurrency: {
     name: string;
