@@ -6,6 +6,7 @@ export interface QuoteParams {
   sourceTokenAddress: string;
   targetTokenAddress: string;
   recipientAddress: string;
+  swapMode?: 'ExactIn' | 'ExactOut'; // Optional, defaults to 'ExactIn'
 }
 
 interface BaseQuoteResponse {
