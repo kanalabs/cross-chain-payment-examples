@@ -25,10 +25,14 @@ cross-chain-examples/
 ├── evm-to-evm.ts        # EVM to EVM example (Arbitrum -> Avalanche)
 ├── evm-to-mvm.ts        # EVM to MVM example (Arbitrum -> Aptos)
 ├── evm-to-svm.ts        # EVM to SVM example (Arbitrum -> Solana)
+├── evm-to-ton.ts        # EVM to TON example (Polygon -> TON)
 ├── mvm-to-evm.ts        # MVM to EVM example (Aptos -> Avalanche)
 ├── mvm-to-svm.ts        # MVM to SVM example (Aptos -> Solana)
 ├── svm-to-evm.ts        # SVM to EVM example (Solana -> Avalanche)
 ├── svm-to-mvm.ts        # SVM to MVM example (Solana -> Aptos)
+├── solana-to-ton.ts     # Solana to TON example (Solana -> TON)
+├── ton-to-evm.ts        # TON to EVM example (TON -> Polygon)
+├── ton-to-solana.ts     # TON to Solana example (TON -> Solana)
 └── README.md            # This file
 ```
 
@@ -37,6 +41,7 @@ cross-chain-examples/
 - **EVM (Ethereum Virtual Machine):** Arbitrum, Avalanche, Ethereum, Polygon, Base, etc.
 - **MVM (Move Virtual Machine):** Aptos, Sui
 - **SVM (Solana Virtual Machine):** Solana
+- **TON:** TON mainnet
 
 ## Prerequisites
 
@@ -61,13 +66,18 @@ POLYGON_RPC=https://polygon-rpc.com
 SOLANA_RPC=https://api.mainnet-beta.solana.com
 APTOS_RPC=https://fullnode.mainnet.aptoslabs.com/v1
 BASE_RPC=https://mainnet.base.org
+TON_RPC=https://toncenter.com/api/v2/jsonRPC
 
 # Wallet Private Keys
 EVM_MAIN_PRIVATE_KEY=0x...                    # EVM chains private key
 SOLANA_PRIVATE_KEY=...                        # Solana wallet private key (base58)
 APTOS_PRIVATE_KEY=...                         # Aptos wallet private key
+TON_MNEMONIC=word1 word2 ... word24           # TON wallet mnemonic
+TONCENTER_API_KEY=...                         # Optional, recommended for TON RPC
 
 # Public Addresses
 APTOS_TARGET_PUBLIC_KEY=0x...                 # Aptos wallet address
 SOLANA_PUBLIC_KEY=...                         # Solana wallet address
+TON_RECIPIENT=EQ...                           # TON wallet address for TON target examples
+EVM_TARGET_PUBLIC_KEY=0x...                   # EVM wallet address for TON -> EVM examples
 ```

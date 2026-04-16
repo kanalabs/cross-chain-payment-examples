@@ -1,5 +1,7 @@
 import { ethers } from 'ethers';
 import { Connection, Keypair, VersionedTransaction } from '@solana/web3.js';
+import { mnemonicToPrivateKey, sign as tonSign, type KeyPair as TonKeyPair } from '@ton/crypto';
+import { Cell, internal, SendMode, TonClient, WalletContractV5R1 } from '@ton/ton';
 import {
   Aptos,
   AptosConfig,
@@ -14,7 +16,7 @@ import {
 } from '@aptos-labs/ts-sdk';
 import bs58 from 'bs58';
 import { CHAIN_CONFIGS, WALLET_CONFIG, CHAIN_GAS_CONFIG } from './config';
-import { TransactionData, KanaChainID } from './types';
+import { KanaChainID, TonTransactionData, TransactionData } from './types';
 import { Logger } from './logger';
 
 
@@ -333,6 +335,121 @@ async sendSolanaTransaction(chainId: KanaChainID, base64Tx: string): Promise<str
     }
 }
 
+  async getTonKeyPair(): Promise<TonKeyPair> {
+    if (!WALLET_CONFIG.TON_MNEMONIC) {
+      throw new Error('TON_MNEMONIC (or MNEMONIC) not found in environment variables');
+    }
+
+    const mnemonic = WALLET_CONFIG.TON_MNEMONIC.trim().split(/\s+/);
+    return mnemonicToPrivateKey(mnemonic);
+  }
+
+  async getTonWallet(): Promise<WalletContractV5R1> {
+    const keyPair = await this.getTonKeyPair();
+    return WalletContractV5R1.create({ publicKey: keyPair.publicKey, workchain: 0 });
+  }
+
+  getTonClient(chainId: KanaChainID = KanaChainID.Ton): TonClient {
+    const chainConfig = CHAIN_CONFIGS[chainId];
+
+    if (!chainConfig || chainConfig.type !== 'TON') {
+      throw new Error(`Chain ${chainId} is not a TON chain`);
+    }
+
+    return new TonClient({
+      endpoint: chainConfig.rpcUrl,
+      apiKey: WALLET_CONFIG.TONCENTER_API_KEY || undefined,
+    });
+  }
+
+  async getTonAddress(): Promise<string> {
+    const wallet = await this.getTonWallet();
+    return wallet.address.toString({ urlSafe: true, bounceable: false });
+  }
+
+  async sendTonTransaction(
+    chainId: KanaChainID,
+    txData: TonTransactionData
+  ): Promise<string> {
+    try {
+      this.logger.info(`Sending transaction on ${CHAIN_CONFIGS[chainId].name}...`);
+
+      const tonClient = this.getTonClient(chainId);
+      const wallet = await this.getTonWallet();
+      const keyPair = await this.getTonKeyPair();
+      const walletProvider = tonClient.open(wallet);
+      const seqno = await walletProvider.getSeqno();
+
+      await walletProvider.sendTransfer({
+        seqno,
+        secretKey: keyPair.secretKey,
+        sendMode: SendMode.PAY_GAS_SEPARATELY,
+        timeout: Math.floor(Date.now() / 1000) + 360,
+        messages: [
+          internal({
+            to: txData.to,
+            value: BigInt(txData.value),
+            body: Cell.fromBase64(txData.body),
+          }),
+        ],
+      });
+
+      this.logger.info(`TON transfer sent with seqno ${seqno}`);
+      this.logger.info('Waiting for confirmation...');
+
+      let currentSeqno = seqno;
+      const startedAt = Date.now();
+
+      while (currentSeqno === seqno && Date.now() - startedAt < 60000) {
+        await this.sleep(1500);
+        currentSeqno = await walletProvider.getSeqno();
+      }
+
+      if (currentSeqno === seqno) {
+        throw new Error('TON transaction confirmation timeout');
+      }
+
+      const txs = await tonClient.getTransactions(wallet.address, { limit: 1 });
+      const transaction = txs[0];
+
+      if (!transaction) {
+        throw new Error('Unable to fetch confirmed TON transaction');
+      }
+
+      const txHash = transaction.hash().toString('hex');
+      this.logger.success(`TON transaction confirmed: ${txHash}`);
+
+      return txHash;
+    } catch (error: any) {
+      this.logger.error('Failed to send TON transaction:', error.message);
+      throw error;
+    }
+  }
+
+  async signTonMessage(message: string): Promise<{ signature: string; publicKey: string }> {
+    const keyPair = await this.getTonKeyPair();
+    const signature = tonSign(Buffer.from(message, 'utf8'), keyPair.secretKey);
+
+    return {
+      signature: signature.toString('hex'),
+      publicKey: keyPair.publicKey.toString('hex'),
+    };
+  }
+
+  async getAddressAsync(chainId: KanaChainID): Promise<string> {
+    const chainConfig = CHAIN_CONFIGS[chainId];
+
+    if (!chainConfig) {
+      throw new Error(`Chain ${chainId} not found in configuration`);
+    }
+
+    if (chainConfig.type === 'TON') {
+      return this.getTonAddress();
+    }
+
+    return this.getAddress(chainId);
+  }
+
 
   getAddress(chainId: KanaChainID): string {
     const chainConfig = CHAIN_CONFIGS[chainId];
@@ -353,6 +470,9 @@ async sendSolanaTransaction(chainId: KanaChainID, base64Tx: string): Promise<str
       case 'MVM':
         const aptosAccount = this.getAptosAccount();
         return aptosAccount.accountAddress.toString();
+
+      case 'TON':
+        throw new Error('Use getTonAddress() or getAddressAsync() for TON wallets');
 
       default:
         throw new Error(`Unsupported chain type: ${chainConfig.type}`);
@@ -394,6 +514,12 @@ async sendSolanaTransaction(chainId: KanaChainID, base64Tx: string): Promise<str
           return (parseInt(coin.coin.value) / 1e8).toString(); // Convert octas to APT
         }
         return '0';
+
+      case 'TON':
+        const tonClient = this.getTonClient(chainId);
+        const tonWallet = await this.getTonWallet();
+        const tonBalance = await tonClient.getBalance(tonWallet.address);
+        return (Number(tonBalance) / 1e9).toString();
 
       default:
         throw new Error(`Unsupported chain type: ${chainConfig.type}`);
